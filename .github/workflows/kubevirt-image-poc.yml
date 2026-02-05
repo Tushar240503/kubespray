@@ -1,0 +1,77 @@
+name: kubevirt-image-poc
+
+on:
+  workflow_dispatch:
+
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Free Disk Space
+      run: |
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        df -h /
+
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Install tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qemu-utils
+
+    - name: Download worst-case images
+      run: |
+        mkdir -p /tmp/images
+
+        # 1) Flatcar (worst case #1)
+        wget -O /tmp/images/flatcar.qcow2 \
+          https://stable.release.flatcar-linux.net/amd64-usr/4081.2.1/flatcar_production_kubevirt_image.qcow2
+
+        # 2) Fedora CoreOS (worst case #2)
+        wget -O /tmp/images/fcos.qcow2.xz \
+          https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/32.20200601.3.0/x86_64/fedora-coreos-32.20200601.3.0-openstack.x86_64.qcow2.xz
+
+        # 3) Ubuntu (baseline)
+        wget -O /tmp/images/ubuntu.qcow2 \
+          https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+
+        ls -lh /tmp/images
+        df -h /
+
+    - name: Decompress Fedora CoreOS
+      run: |
+        xz -d /tmp/images/fcos.qcow2.xz
+        ls -lh /tmp/images
+        df -h /
+
+    - name: qemu-img convert (Flatcar)
+      run: |
+        qemu-img convert -O qcow2 /tmp/images/flatcar.qcow2 /tmp/images/flatcar-converted.qcow2
+        df -h /
+
+    - name: qemu-img convert (Fedora CoreOS)
+      run: |
+        qemu-img convert -O qcow2 /tmp/images/fcos.qcow2 /tmp/images/fcos-converted.qcow2
+        df -h /
+
+    - name: qemu-img convert (Ubuntu)
+      run: |
+        qemu-img convert -O qcow2 /tmp/images/ubuntu.qcow2 /tmp/images/ubuntu-converted.qcow2
+        df -h /
+
+    - name: Docker build test (simulated)
+      run: |
+        cat > Dockerfile << 'EOF'
+        FROM scratch
+        COPY /tmp/images/flatcar-converted.qcow2 /flatcar.qcow2
+        COPY /tmp/images/fcos-converted.qcow2 /fcos.qcow2
+        COPY /tmp/images/ubuntu-converted.qcow2 /ubuntu.qcow2
+        EOF
+
+        docker build -t kubevirt-poc:test .
+        docker image ls
+        df -h /
