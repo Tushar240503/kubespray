@@ -21,47 +21,65 @@ jobs:
     - name: Install tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y qemu-utils
+        sudo apt-get install -y qemu-utils xz-utils
 
     - name: Download worst-case images
       run: |
+        set -e
         mkdir -p /tmp/images
 
-        # 1) Flatcar (worst case #1)
+        echo "Downloading Flatcar..."
         wget -O /tmp/images/flatcar.qcow2 \
           https://stable.release.flatcar-linux.net/amd64-usr/4081.2.1/flatcar_production_kubevirt_image.qcow2
 
-        # 2) Fedora CoreOS (worst case #2)
+        echo "Downloading Fedora CoreOS..."
         wget -O /tmp/images/fcos.qcow2.xz \
           https://builds.coreos.fedoraproject.org/prod/streams/stable/builds/32.20200601.3.0/x86_64/fedora-coreos-32.20200601.3.0-openstack.x86_64.qcow2.xz
 
-        # 3) Ubuntu (baseline)
+        echo "Downloading Ubuntu..."
         wget -O /tmp/images/ubuntu.qcow2 \
           https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
 
+        echo "After downloads:"
         ls -lh /tmp/images
         df -h /
 
     - name: Decompress Fedora CoreOS
       run: |
+        set -e
         xz -d /tmp/images/fcos.qcow2.xz
+        echo "After decompression:"
         ls -lh /tmp/images
         df -h /
 
-    - name: qemu-img convert (Flatcar)
+    - name: Convert images with qemu-img
       run: |
-        qemu-img convert -O qcow2 /tmp/images/flatcar.qcow2 /tmp/images/flatcar-converted.qcow2
+        set -e
+
+        echo "Converting Flatcar..."
+        qemu-img convert -O qcow2 \
+          /tmp/images/flatcar.qcow2 \
+          /tmp/images/flatcar-converted.qcow2
+
+        echo "Converting Fedora CoreOS..."
+        qemu-img convert -O qcow2 \
+          /tmp/images/fcos.qcow2 \
+          /tmp/images/fcos-converted.qcow2
+
+        echo "Converting Ubuntu..."
+        qemu-img convert -O qcow2 \
+          /tmp/images/ubuntu.qcow2 \
+          /tmp/images/ubuntu-converted.qcow2
+
+        echo "After conversion:"
+        ls -lh /tmp/images
         df -h /
 
-    - name: qemu-img convert (Fedora CoreOS)
+    - name: Debug: confirm files exist
       run: |
-        qemu-img convert -O qcow2 /tmp/images/fcos.qcow2 /tmp/images/fcos-converted.qcow2
-        df -h /
-
-    - name: qemu-img convert (Ubuntu)
-      run: |
-        qemu-img convert -O qcow2 /tmp/images/ubuntu.qcow2 /tmp/images/ubuntu-converted.qcow2
-        df -h /
+        ls -lh /tmp/images/flatcar-converted.qcow2 || echo "Flatcar missing!"
+        ls -lh /tmp/images/fcos-converted.qcow2 || echo "FCOS missing!"
+        ls -lh /tmp/images/ubuntu-converted.qcow2 || echo "Ubuntu missing!"
 
     - name: Docker build test (simulated)
       run: |
