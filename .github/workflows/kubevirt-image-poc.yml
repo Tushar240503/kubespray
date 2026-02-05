@@ -75,19 +75,22 @@ jobs:
         ls -lh /tmp/images
         df -h /
 
-    - name: Debug: confirm files exist
+    - name: Move images into Docker build context (FIX)
       run: |
-        ls -lh /tmp/images/flatcar-converted.qcow2 || echo "Flatcar missing!"
-        ls -lh /tmp/images/fcos-converted.qcow2 || echo "FCOS missing!"
-        ls -lh /tmp/images/ubuntu-converted.qcow2 || echo "Ubuntu missing!"
+        mkdir -p images
+        cp /tmp/images/flatcar-converted.qcow2 images/
+        cp /tmp/images/fcos-converted.qcow2 images/
+        cp /tmp/images/ubuntu-converted.qcow2 images/
+        echo "Images now inside repo (Docker can see them):"
+        ls -lh images
 
     - name: Docker build test (simulated)
       run: |
         cat > Dockerfile << 'EOF'
         FROM scratch
-        COPY /tmp/images/flatcar-converted.qcow2 /flatcar.qcow2
-        COPY /tmp/images/fcos-converted.qcow2 /fcos.qcow2
-        COPY /tmp/images/ubuntu-converted.qcow2 /ubuntu.qcow2
+        COPY images/flatcar-converted.qcow2 /flatcar.qcow2
+        COPY images/fcos-converted.qcow2 /fcos.qcow2
+        COPY images/ubuntu-converted.qcow2 /ubuntu.qcow2
         EOF
 
         docker build -t kubevirt-poc:test .
